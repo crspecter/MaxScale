@@ -486,6 +486,7 @@ public:
             {
                 MXS_ERROR("Expected status message in the context of %s, "
                           "but received a %s.", zContext, redis_type_to_string(reply.type()));
+                rv = REDIS_ERR;
             }
         }
         else
