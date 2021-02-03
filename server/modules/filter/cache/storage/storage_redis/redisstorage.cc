@@ -593,11 +593,11 @@ public:
                         break;
 
                     case REDIS_REPLY_ERROR:
-                        MXS_ERROR("Redis replied with error: %s", sThis->m_redis.errstr());
+                        MXS_ERROR("Redis GET replied with error: %s", sThis->m_redis.errstr());
                         break;
 
                     default:
-                        MXS_WARNING("Unexpected redis redis return type (%s) received.",
+                        MXS_WARNING("Redis GET unexpectededly replied with a %s.",
                                     redis_type_to_string(reply.type()));
                     }
                 }
@@ -705,11 +705,11 @@ public:
                         break;
 
                     case REDIS_REPLY_ERROR:
-                        MXS_ERROR("Redis replied with error: %s", sThis->m_redis.errstr());
+                        MXS_ERROR("Redis DEL replied with error: %s", sThis->m_redis.errstr());
                         break;
 
                     default:
-                        MXS_WARNING("Unexpected redis return type (%s) received.",
+                        MXS_WARNING("Redis DEL unexpectedly replied with a %s.",
                                     redis_type_to_string(reply.type()));
                         break;
                     }
