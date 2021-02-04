@@ -593,7 +593,7 @@ public:
                         break;
 
                     case REDIS_REPLY_ERROR:
-                        MXS_ERROR("Redis GET replied with error: %s", sThis->m_redis.errstr());
+                        MXS_ERROR("Redis GET replied with error: %.*s", (int)reply.len(), reply.str());
                         break;
 
                     default:
@@ -705,7 +705,7 @@ public:
                         break;
 
                     case REDIS_REPLY_ERROR:
-                        MXS_ERROR("Redis DEL replied with error: %s", sThis->m_redis.errstr());
+                        MXS_ERROR("Redis DEL replied with error: %.*s", (int)reply.len(), reply.str());
                         break;
 
                     default:
