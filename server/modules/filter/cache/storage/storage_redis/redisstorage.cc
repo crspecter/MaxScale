@@ -467,33 +467,42 @@ public:
         return rv;
     }
 
-    bool expect_status(const char* zValue, const char* zContext)
+    bool expect_status(Reply& reply, const char* zValue, const char* zContext)
     {
         mxb_assert(m_pContext);
 
-        if (!zContext)
+        int rv = REDIS_OK;
+
+        if (reply.is_status())
         {
-            zContext = "unspecified";
+            if (strcmp(reply.str(), zValue) != 0)
+            {
+                MXS_ERROR("Expected status message '%s' in the context of %s, "
+                          "but received '%s'.", zValue, zContext, reply.str());
+                rv = REDIS_ERR;
+            }
         }
+        else
+        {
+            MXS_ERROR("Expected status message in the context of %s, "
+                      "but received a %s.", zContext, redis_type_to_string(reply.type()));
+            rv = REDIS_ERR;
+        }
+
+        return rv == REDIS_OK;
+    }
+
+    bool expect_status(const char* zValue, const char* zContext)
+    {
+        mxb_assert(m_pContext);
 
         Reply reply;
         int rv = getReply(&reply);
 
         if (rv == REDIS_OK)
         {
-            if (reply.is_status())
+            if (!expect_status(reply, zValue, zContext))
             {
-                if (strcmp(reply.str(), zValue) != 0)
-                {
-                    MXS_ERROR("Expected status message '%s' in the context of %s, "
-                              "but received '%s'.", zValue, zContext, reply.str());
-                    rv = REDIS_ERR;
-                }
-            }
-            else
-            {
-                MXS_ERROR("Expected status message in the context of %s, "
-                          "but received a %s.", zContext, redis_type_to_string(reply.type()));
                 rv = REDIS_ERR;
             }
         }
