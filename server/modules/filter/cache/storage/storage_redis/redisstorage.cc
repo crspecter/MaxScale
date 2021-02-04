@@ -796,7 +796,6 @@ private:
     enum class RedisAction
     {
         OK,
-        RETRY,
         ERROR
     };
 
@@ -895,21 +894,13 @@ private:
 
             if (rc == REDIS_OK)
             {
-                if (reply.is_nil())
-                {
-                    // This *may* happen if WATCH is used, but since we are not, it should not.
-                    mxb_assert(!true);
-                    action = RedisAction::RETRY;
-                }
-                else
+                if (reply.is_array())
                 {
                     // The reply will now contain the actual responses to the commands
                     // issued after MULTI.
-                    mxb_assert(reply.is_array());
                     mxb_assert(reply.elements() == n + 1);
 
                     Redis::Reply element;
-
 #ifdef SS_DEBUG
                     for (size_t i = 0; i < n; ++i)
                     {
@@ -917,7 +908,6 @@ private:
                         mxb_assert(element.is_integer());
                     }
 #endif
-
                     // Then the SET
                     element = reply.element(n);
                     mxb_assert(element.is_status());
@@ -928,6 +918,12 @@ private:
                                   "received '%s'.", reply.str());
                         action = RedisAction::ERROR;
                     }
+                }
+                else
+                {
+                    MXS_ERROR("Redis did not reply with an array when expected to do so, "
+                              "but with a %s.", redis_type_to_string(reply.type()));
+                    action = RedisAction::ERROR;
                 }
             }
             else
@@ -1128,17 +1124,10 @@ private:
 
             if (rc == REDIS_OK)
             {
-                if (reply.is_nil())
-                {
-                    // This *may* happen if WATCH is used, but since we are not, it should not.
-                    mxb_assert(!true);
-                    action = RedisAction::RETRY;
-                }
-                else
+                if (reply.is_array())
                 {
                     // The reply will not contain the actual responses to the commands
                     // issued after MULTI.
-                    mxb_assert(reply.is_array());
                     mxb_assert(reply.elements() == n + 1);
 
 #ifdef SS_DEBUG
@@ -1154,6 +1143,12 @@ private:
                     element = reply.element(n);
                     mxb_assert(element.is_integer());
 #endif
+                }
+                else
+                {
+                    MXS_ERROR("Redis did not reply with an array when expected to do so, "
+                              "but with a %s.", redis_type_to_string(reply.type()));
+                    action = RedisAction::ERROR;
                 }
             }
             else
