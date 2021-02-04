@@ -379,6 +379,11 @@ public:
     {
     }
 
+    redisContext* context() const
+    {
+        return m_pContext;
+    }
+
     void reset(redisContext* pContext)
     {
         redisFree(m_pContext);
@@ -387,7 +392,10 @@ public:
 
     bool connected() const
     {
-        return m_pContext && (m_pContext->flags & REDIS_CONNECTED);
+        return
+            m_pContext
+            && (m_pContext->flags & REDIS_CONNECTED)
+            && (m_pContext->err == 0);
     }
 
     const char* errstr() const
@@ -1181,6 +1189,16 @@ private:
     {
         if (!m_connecting)
         {
+            redisContext* pContext = m_redis.context();
+
+            if (pContext)
+            {
+                mxb_assert(pContext->err != 0);
+
+                MXS_NOTICE("Reconnecting to Redis due to error: %s",
+                           pContext->errstr ? pContext->errstr : "unknown");
+            }
+
             m_reconnecting = true;
 
             auto now = std::chrono::steady_clock::now();
