@@ -845,18 +845,46 @@ private:
         MXB_AT_DEBUG(rc =) m_redis.appendCommand("EXEC");
         mxb_assert(rc == REDIS_OK);
 
-        action = read_put_value_reply(n);
+        Redis::Reply reply;
+        rc = m_redis.getReply(&reply);
+
+        if (rc == REDIS_OK)
+        {
+            if (!reply.is_nil())
+            {
+                action = read_put_value_reply(reply, n);
+            }
+            else
+            {
+                MXS_ERROR("Redis replied with NIL to MULTI, reconnecting: %s",
+                          m_redis.errstr());
+                action = RedisAction::ERROR;
+            }
+        }
+        else
+        {
+            MXS_ERROR("Failed when reading reply to MULTI, reconnecting: %s, %s",
+                      redis_error_to_string(rc).c_str(),
+                      m_redis.errstr());
+            action = RedisAction::ERROR;
+        }
+
+        if (action == RedisAction::ERROR)
+        {
+            // At next attempt at using the cache, a reconnect will be made.
+            disconnect();
+        }
 
         return action;
     }
 
-    RedisAction read_put_value_reply(size_t n)
+    RedisAction read_put_value_reply(Redis::Reply& reply, size_t n)
     {
         RedisAction action = RedisAction::OK;
 
         int rc = 0;
-        // This will be the response to MULTI above.
-        if (m_redis.expect_status("OK", "MULTI"))
+        // This is the response to MULTI above.
+        if (m_redis.expect_status(reply, "OK", "MULTI"))
         {
             // All commands before EXEC should only return a status of QUEUED.
             m_redis.expect_n_status(n + 1, "QUEUED", "queued command");
@@ -904,17 +932,15 @@ private:
             }
             else
             {
-                MXS_WARNING("Failed fatally when reading reply to EXEC: %s, %s",
-                            redis_error_to_string(rc).c_str(),
-                            m_redis.errstr());
+                MXS_ERROR("Failed fatally when reading reply to EXEC: %s, %s",
+                          redis_error_to_string(rc).c_str(),
+                          m_redis.errstr());
                 action = RedisAction::ERROR;
             }
         }
         else
         {
-            MXS_ERROR("Failed when reading response to MULTI: %s, %s",
-                      redis_error_to_string(rc).c_str(),
-                      m_redis.errstr());
+            // A complaint has already been logged in expect_status().
             action = RedisAction::ERROR;
         }
 
@@ -1046,7 +1072,35 @@ private:
             rc = m_redis.appendCommand("EXEC");
             mxb_assert(rc == REDIS_OK);
 
-            action = read_invalidate_reply(srem_argvs.size());
+            Redis::Reply reply;
+            rc = m_redis.getReply(&reply);
+
+            if (rc == REDIS_OK)
+            {
+                if (!reply.is_nil())
+                {
+                    action = read_invalidate_reply(reply, srem_argvs.size());
+                }
+                else
+                {
+                    MXS_ERROR("Redis replied with NIL to MULTI, reconnecting: %s",
+                              m_redis.errstr());
+                    action = RedisAction::ERROR;
+                }
+            }
+            else
+            {
+                MXS_ERROR("Failed when reading reply to MULTI, reconnecting: %s, %s",
+                          redis_error_to_string(rc).c_str(),
+                          m_redis.errstr());
+                action = RedisAction::ERROR;
+            }
+
+            if (action == RedisAction::ERROR)
+            {
+                // At next attempt at using the cache, a reconnect will be made.
+                disconnect();
+            }
         }
 
         // Does this work? Probably not in all cases; it appears that WATCH
@@ -1057,13 +1111,13 @@ private:
         return action;
     }
 
-    RedisAction read_invalidate_reply(size_t n)
+    RedisAction read_invalidate_reply(Redis::Reply& reply, size_t n)
     {
         RedisAction action = RedisAction::OK;
 
         int rc = 0;
-        // This will be the response to MULTI above.
-        if (m_redis.expect_status("OK", "MULTI"))
+        // This is be the response to MULTI above.
+        if (m_redis.expect_status(reply, "OK", "MULTI"))
         {
             // All commands before EXEC should only return a status of QUEUED.
             m_redis.expect_n_status(n + 1, "QUEUED", "queued command");
@@ -1104,8 +1158,7 @@ private:
             }
             else
             {
-                MXS_ERROR("Could not read EXEC reply from redis, the cache is now "
-                          "in an unknown state: %s, %s",
+                MXS_ERROR("Failed fatally when reading reply to EXEC: %s, %s",
                           redis_error_to_string(rc).c_str(),
                           m_redis.errstr());
                 action = RedisAction::ERROR;
@@ -1113,10 +1166,7 @@ private:
         }
         else
         {
-            MXS_ERROR("Could not read MULTI reply from redis, the cache is now "
-                      "in an unknown state: %s, %s",
-                      redis_error_to_string(rc).c_str(),
-                      m_redis.errstr());
+            // A complaint has already been logged in expect_status().
             action = RedisAction::ERROR;
         }
 
