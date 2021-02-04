@@ -384,7 +384,7 @@ public:
         return m_pContext;
     }
 
-    void reset(redisContext* pContext)
+    void reset(redisContext* pContext = nullptr)
     {
         redisFree(m_pContext);
         m_pContext = pContext;
@@ -1208,6 +1208,13 @@ private:
                 connect();
             }
         }
+    }
+
+    void disconnect()
+    {
+        mxb_assert(!m_connecting);
+
+        m_redis.reset();
     }
 
 private:
