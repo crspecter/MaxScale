@@ -855,14 +855,14 @@ private:
             }
             else
             {
-                MXS_ERROR("Redis replied with NIL to MULTI, reconnecting: %s",
+                MXS_ERROR("Redis replied with NIL to MULTI: %s",
                           m_redis.errstr());
                 action = RedisAction::ERROR;
             }
         }
         else
         {
-            MXS_ERROR("Failed when reading reply to MULTI, reconnecting: %s, %s",
+            MXS_ERROR("Failed when reading reply to MULTI: %s, %s",
                       redis_error_to_string(rc).c_str(),
                       m_redis.errstr());
             action = RedisAction::ERROR;
@@ -870,6 +870,7 @@ private:
 
         if (action == RedisAction::ERROR)
         {
+            MXS_WARNING("Disconnecting and reconnecting to Redis.");
             // At next attempt at using the cache, a reconnect will be made.
             disconnect();
         }
@@ -886,51 +887,57 @@ private:
         if (m_redis.expect_status(reply, "OK", "MULTI"))
         {
             // All commands before EXEC should only return a status of QUEUED.
-            m_redis.expect_n_status(n + 1, "QUEUED", "queued command");
-
-            // The reply to EXEC
-            Redis::Reply reply;
-            rc = m_redis.getReply(&reply);
-
-            if (rc == REDIS_OK)
+            if (m_redis.expect_n_status(n + 1, "QUEUED", "queued command"))
             {
-                if (reply.is_array())
+                // The reply to EXEC
+                Redis::Reply reply;
+                rc = m_redis.getReply(&reply);
+
+                if (rc == REDIS_OK)
                 {
-                    // The reply will now contain the actual responses to the commands
-                    // issued after MULTI.
-                    mxb_assert(reply.elements() == n + 1);
+                    if (reply.is_array())
+                    {
+                        // The reply will now contain the actual responses to the commands
+                        // issued after MULTI.
+                        mxb_assert(reply.elements() == n + 1);
 
-                    Redis::Reply element;
+                        Redis::Reply element;
 #ifdef SS_DEBUG
-                    for (size_t i = 0; i < n; ++i)
-                    {
-                        element = reply.element(i);
-                        mxb_assert(element.is_integer());
-                    }
+                        for (size_t i = 0; i < n; ++i)
+                        {
+                            element = reply.element(i);
+                            mxb_assert(element.is_integer());
+                        }
 #endif
-                    // Then the SET
-                    element = reply.element(n);
-                    mxb_assert(element.is_status());
+                        // Then the SET
+                        element = reply.element(n);
+                        mxb_assert(element.is_status());
 
-                    if (!element.is_status("OK"))
+                        if (!element.is_status("OK"))
+                        {
+                            MXS_ERROR("Failed when storing cache value to redis, expected 'OK' but "
+                                      "received '%s'.", reply.str());
+                            action = RedisAction::ERROR;
+                        }
+                    }
+                    else
                     {
-                        MXS_ERROR("Failed when storing cache value to redis, expected 'OK' but "
-                                  "received '%s'.", reply.str());
+                        MXS_ERROR("Redis did not reply with an array when expected to do so, "
+                                  "but with a %s.", redis_type_to_string(reply.type()));
                         action = RedisAction::ERROR;
                     }
                 }
                 else
                 {
-                    MXS_ERROR("Redis did not reply with an array when expected to do so, "
-                              "but with a %s.", redis_type_to_string(reply.type()));
+                    MXS_ERROR("Failed fatally when reading reply to EXEC: %s, %s",
+                              redis_error_to_string(rc).c_str(),
+                              m_redis.errstr());
                     action = RedisAction::ERROR;
                 }
             }
             else
             {
-                MXS_ERROR("Failed fatally when reading reply to EXEC: %s, %s",
-                          redis_error_to_string(rc).c_str(),
-                          m_redis.errstr());
+                // A complaint has already been logged in expect_n_status().
                 action = RedisAction::ERROR;
             }
         }
@@ -1079,14 +1086,14 @@ private:
                 }
                 else
                 {
-                    MXS_ERROR("Redis replied with NIL to MULTI, reconnecting: %s",
+                    MXS_ERROR("Redis replied with NIL to MULTI: %s",
                               m_redis.errstr());
                     action = RedisAction::ERROR;
                 }
             }
             else
             {
-                MXS_ERROR("Failed when reading reply to MULTI, reconnecting: %s, %s",
+                MXS_ERROR("Failed when reading reply to MULTI: %s, %s",
                           redis_error_to_string(rc).c_str(),
                           m_redis.errstr());
                 action = RedisAction::ERROR;
@@ -1094,6 +1101,7 @@ private:
 
             if (action == RedisAction::ERROR)
             {
+                MXS_WARNING("Disconnecting and reconnecting to Redis.");
                 // At next attempt at using the cache, a reconnect will be made.
                 disconnect();
             }
@@ -1116,46 +1124,52 @@ private:
         if (m_redis.expect_status(reply, "OK", "MULTI"))
         {
             // All commands before EXEC should only return a status of QUEUED.
-            m_redis.expect_n_status(n + 1, "QUEUED", "queued command");
-
-            // The reply to EXEC
-            Redis::Reply reply;
-            rc = m_redis.getReply(&reply);
-
-            if (rc == REDIS_OK)
+            if (m_redis.expect_n_status(n + 1, "QUEUED", "queued command"))
             {
-                if (reply.is_array())
+                // The reply to EXEC
+                Redis::Reply reply;
+                rc = m_redis.getReply(&reply);
+
+                if (rc == REDIS_OK)
                 {
-                    // The reply will not contain the actual responses to the commands
-                    // issued after MULTI.
-                    mxb_assert(reply.elements() == n + 1);
+                    if (reply.is_array())
+                    {
+                        // The reply will not contain the actual responses to the commands
+                        // issued after MULTI.
+                        mxb_assert(reply.elements() == n + 1);
 
 #ifdef SS_DEBUG
-                    Redis::Reply element;
-                    // Then we handle the replies to the "SREM" commands.
-                    for (size_t i = 0; i < n; ++i)
-                    {
-                        element = reply.element(i);
-                        mxb_assert(element.is_integer());
-                    }
+                        Redis::Reply element;
+                        // Then we handle the replies to the "SREM" commands.
+                        for (size_t i = 0; i < n; ++i)
+                        {
+                            element = reply.element(i);
+                            mxb_assert(element.is_integer());
+                        }
 
-                    // Finally the DEL itself.
-                    element = reply.element(n);
-                    mxb_assert(element.is_integer());
+                        // Finally the DEL itself.
+                        element = reply.element(n);
+                        mxb_assert(element.is_integer());
 #endif
+                    }
+                    else
+                    {
+                        MXS_ERROR("Redis did not reply with an array when expected to do so, "
+                                  "but with a %s.", redis_type_to_string(reply.type()));
+                        action = RedisAction::ERROR;
+                    }
                 }
                 else
                 {
-                    MXS_ERROR("Redis did not reply with an array when expected to do so, "
-                              "but with a %s.", redis_type_to_string(reply.type()));
+                    MXS_ERROR("Failed fatally when reading reply to EXEC: %s, %s",
+                              redis_error_to_string(rc).c_str(),
+                              m_redis.errstr());
                     action = RedisAction::ERROR;
                 }
             }
             else
             {
-                MXS_ERROR("Failed fatally when reading reply to EXEC: %s, %s",
-                          redis_error_to_string(rc).c_str(),
-                          m_redis.errstr());
+                // A complaint has already been logged in expect_n_status().
                 action = RedisAction::ERROR;
             }
         }
