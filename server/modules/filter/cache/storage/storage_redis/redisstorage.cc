@@ -880,7 +880,7 @@ private:
 
     RedisAction read_put_value_reply(Redis::Reply& reply, size_t n)
     {
-        RedisAction action = RedisAction::OK;
+        RedisAction action = RedisAction::ERROR;
 
         int rc = 0;
         // This is the response to MULTI above.
@@ -913,18 +913,20 @@ private:
                         element = reply.element(n);
                         mxb_assert(element.is_status());
 
-                        if (!element.is_status("OK"))
+                        if (element.is_status("OK"))
+                        {
+                            action = RedisAction::OK;
+                        }
+                        else
                         {
                             MXS_ERROR("Failed when storing cache value to redis, expected 'OK' but "
                                       "received '%s'.", reply.str());
-                            action = RedisAction::ERROR;
                         }
                     }
                     else
                     {
                         MXS_ERROR("Redis did not reply with an array when expected to do so, "
                                   "but with a %s.", redis_type_to_string(reply.type()));
-                        action = RedisAction::ERROR;
                     }
                 }
                 else
@@ -932,19 +934,8 @@ private:
                     MXS_ERROR("Failed fatally when reading reply to EXEC: %s, %s",
                               redis_error_to_string(rc).c_str(),
                               m_redis.errstr());
-                    action = RedisAction::ERROR;
                 }
             }
-            else
-            {
-                // A complaint has already been logged in expect_n_status().
-                action = RedisAction::ERROR;
-            }
-        }
-        else
-        {
-            // A complaint has already been logged in expect_status().
-            action = RedisAction::ERROR;
         }
 
         return action;
@@ -1117,7 +1108,7 @@ private:
 
     RedisAction read_invalidate_reply(Redis::Reply& reply, size_t n)
     {
-        RedisAction action = RedisAction::OK;
+        RedisAction action = RedisAction::ERROR;
 
         int rc = 0;
         // This is be the response to MULTI above.
@@ -1137,7 +1128,6 @@ private:
                         // The reply will not contain the actual responses to the commands
                         // issued after MULTI.
                         mxb_assert(reply.elements() == n + 1);
-
 #ifdef SS_DEBUG
                         Redis::Reply element;
                         // Then we handle the replies to the "SREM" commands.
@@ -1151,12 +1141,12 @@ private:
                         element = reply.element(n);
                         mxb_assert(element.is_integer());
 #endif
+                        action = RedisAction::OK;
                     }
                     else
                     {
                         MXS_ERROR("Redis did not reply with an array when expected to do so, "
                                   "but with a %s.", redis_type_to_string(reply.type()));
-                        action = RedisAction::ERROR;
                     }
                 }
                 else
@@ -1164,19 +1154,8 @@ private:
                     MXS_ERROR("Failed fatally when reading reply to EXEC: %s, %s",
                               redis_error_to_string(rc).c_str(),
                               m_redis.errstr());
-                    action = RedisAction::ERROR;
                 }
             }
-            else
-            {
-                // A complaint has already been logged in expect_n_status().
-                action = RedisAction::ERROR;
-            }
-        }
-        else
-        {
-            // A complaint has already been logged in expect_status().
-            action = RedisAction::ERROR;
         }
 
         return action;
