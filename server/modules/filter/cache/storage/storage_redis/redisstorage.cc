@@ -139,6 +139,7 @@
 #include <maxscale/threadpool.hh>
 
 using std::map;
+using std::ostringstream;
 using std::shared_ptr;
 using std::string;
 using std::vector;
@@ -372,6 +373,36 @@ public:
             return Reply(m_pReply->element[i], Reply::BORROWED);
         }
 
+        string as_string() const
+        {
+            mxb_assert(m_pReply);
+
+            ostringstream ss;
+
+            ss << type_name();
+
+            switch (type())
+            {
+            case REDIS_REPLY_INTEGER:
+                ss << " (" << m_pReply->integer << ")";
+                break;
+
+            case REDIS_REPLY_DOUBLE:
+                ss << " (" << m_pReply->dval << ")";
+                break;
+
+            case REDIS_REPLY_ERROR:
+            case REDIS_REPLY_STRING:
+                ss << " (\"" << string(m_pReply->str, m_pReply->len) << "\")";
+                break;
+
+            default:
+                break;
+            }
+
+            return ss.str();
+        }
+
     private:
         redisReply* m_pReply;
         Ownership   m_ownership;
@@ -491,7 +522,7 @@ public:
         else
         {
             MXS_ERROR("Expected status message in the context of %s, "
-                      "but received a %s.", zContext, reply.type_name());
+                      "but received a %s.", zContext, reply.as_string().c_str());
             rv = REDIS_ERR;
         }
 
@@ -620,7 +651,8 @@ public:
                         break;
 
                     default:
-                        MXS_WARNING("Redis GET unexpectededly replied with a %s.", reply.type_name());
+                        MXS_WARNING("Redis GET unexpectededly replied with a %s.",
+                                    reply.as_string().c_str());
                     }
                 }
                 else
@@ -731,7 +763,8 @@ public:
                         break;
 
                     default:
-                        MXS_WARNING("Redis DEL unexpectedly replied with a %s.", reply.type_name());
+                        MXS_WARNING("Redis DEL unexpectedly replied with a %s.",
+                                    reply.as_string().c_str());
                         break;
                     }
                 }
@@ -930,7 +963,7 @@ private:
                     else
                     {
                         MXS_ERROR("Redis did not reply with an array when expected to do so, "
-                                  "but with a %s.", reply.type_name());
+                                  "but with a %s.", reply.as_string().c_str());
                     }
                 }
                 else
@@ -1017,7 +1050,8 @@ private:
                         }
                         else
                         {
-                            MXS_ERROR("Unexpected type returned by redis: %s", element.type_name());
+                            MXS_ERROR("Unexpected type returned by redis: %s",
+                                      element.as_string().c_str());
                         }
                     }
 
@@ -1149,7 +1183,7 @@ private:
                     else
                     {
                         MXS_ERROR("Redis did not reply with an array when expected to do so, "
-                                  "but with a %s.", reply.type_name());
+                                  "but with a %s.", reply.as_string().c_str());
                     }
                 }
                 else
